@@ -86,42 +86,45 @@ export const confirmBooking = async (ticketId: string, userId: string) => {
     throw new ValidationError('Booking ID and User ID are required');
   }
 
-  const [ticket] = await db
-    .select()
-    .from(tickets)
-    .where(eq(tickets.id, ticketId));
+  return await db.transaction(async (tx) => {
+    const [ticket] = await tx
+      .select()
+      .from(tickets)
+      .where(eq(tickets.id, ticketId))
+      .for('update');
 
-  if (!ticket) {
-    throw new NotFoundError('Booking not found');
-  }
+    if (!ticket) {
+      throw new NotFoundError('Booking not found');
+    }
 
-  if (ticket.userId !== userId) {
-    throw new AuthorizationError('Not authorized to confirm this booking');
-  }
+    if (ticket.userId !== userId) {
+      throw new AuthorizationError('Not authorized to confirm this booking');
+    }
 
-  if (ticket.status !== 'pending') {
-    throw new ConflictError(
-      `Booking cannot be confirmed. Current status: ${ticket.status}`
-    );
-  }
+    if (ticket.status !== 'pending') {
+      throw new ConflictError(
+        `Booking cannot be confirmed. Current status: ${ticket.status}`
+      );
+    }
 
-  if (ticket.holdExpiry && new Date() > new Date(ticket.holdExpiry)) {
-    throw new ConflictError('Booking hold has expired');
-  }
+    if (ticket.holdExpiry && new Date() > new Date(ticket.holdExpiry)) {
+      throw new ConflictError('Booking hold has expired');
+    }
 
-  const [confirmed] = await db
-    .update(tickets)
-    .set({
-      status: 'confirmed',
-      holdExpiry: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(tickets.id, ticketId))
-    .returning();
+    const [confirmed] = await tx
+      .update(tickets)
+      .set({
+        status: 'confirmed',
+        holdExpiry: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(tickets.id, ticketId))
+      .returning();
 
-  await redisClient.invalidateEvent(ticket.eventId);
+    await redisClient.invalidateEvent(ticket.eventId);
 
-  return confirmed;
+    return confirmed;
+  });
 };
 
 export const cancelBooking = async (ticketId: string, userId: string) => {
@@ -144,8 +147,10 @@ export const cancelBooking = async (ticketId: string, userId: string) => {
       throw new AuthorizationError('Not authorized to cancel this booking');
     }
 
-    if (ticket.status === 'cancelled') {
-      throw new ConflictError('Booking already cancelled');
+    if (ticket.status !== 'pending' && ticket.status !== 'confirmed') {
+      throw new ConflictError(
+        `Booking cannot be cancelled. Current status: ${ticket.status}`
+      );
     }
 
     const [event] = await tx

@@ -18,6 +18,7 @@ vi.mock('../../src/config/redis.js', () => ({
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(true),
     invalidateEvent: vi.fn().mockResolvedValue(true),
+    invalidateEventLists: vi.fn().mockResolvedValue(true),
     delPattern: vi.fn().mockResolvedValue(true),
   },
 }));
@@ -107,7 +108,7 @@ describe('Event Service', () => {
       const result = await createEvent(mockEventData, 'user-1');
       expect(result.id).toBe(mockCreated.id);
       expect(result.availableTickets).toBe(100);
-      expect(redisClient.delPattern).toHaveBeenCalledWith('events:*');
+      expect(redisClient.invalidateEventLists).toHaveBeenCalled();
     });
 
     it('should throw ValidationError if userId is missing', async () => {

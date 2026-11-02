@@ -23,6 +23,7 @@ describe('Drizzle Schemas', () => {
   it('should export valid table definitions with primary key id', () => {
     expect(users.id).toBeDefined();
     expect(events.id).toBeDefined();
+    expect(events.date).toBeDefined();
     expect(tickets.id).toBeDefined();
     expect(tickets.holdExpiry).toBeDefined();
   });

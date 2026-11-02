@@ -26,7 +26,7 @@ export const createEvent = async (data: CreateEventInput, userId: string) => {
     })
     .returning();
 
-  await redisClient.delPattern('events:*');
+  await redisClient.invalidateEventLists();
 
   return event;
 };

@@ -133,7 +133,11 @@ export class RedisClient {
   }
 
   async invalidateEventLists(): Promise<boolean> {
-    return await this.delPattern('events:*');
+    const results = await Promise.all([
+      this.delPattern('events:*'),
+      this.delPattern('route:/api/v1/events*'),
+    ]);
+    return results.every(Boolean);
   }
 
   async cacheEvent(eventId: string, eventData: any, ttl = 1800): Promise<boolean> {

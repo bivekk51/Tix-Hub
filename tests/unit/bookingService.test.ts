@@ -138,6 +138,11 @@ describe('Booking Service', () => {
   });
 
   describe('confirmBooking', () => {
+    it('should throw ValidationError if ticketId or userId is missing', async () => {
+      await expect(confirmBooking('', 'user-1')).rejects.toThrow(ValidationError);
+      await expect(confirmBooking('ticket-1', '')).rejects.toThrow(ValidationError);
+    });
+
     it('should throw ConflictError if hold has expired', async () => {
       const expiredTicket = {
         id: 'ticket-1',
@@ -146,10 +151,17 @@ describe('Booking Service', () => {
         holdExpiry: new Date(Date.now() - 10000),
       };
 
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([expiredTicket]),
-        }),
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const tx = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockResolvedValue([expiredTicket]),
+              }),
+            }),
+          }),
+        };
+        return await callback(tx);
       });
 
       await expect(confirmBooking('ticket-1', 'user-1')).rejects.toThrow(ConflictError);
@@ -164,20 +176,34 @@ describe('Booking Service', () => {
         holdExpiry: new Date(Date.now() + 600000),
       };
 
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([ticket]),
-        }),
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const tx = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockResolvedValue([ticket]),
+              }),
+            }),
+          }),
+        };
+        return await callback(tx);
       });
 
       await expect(confirmBooking('ticket-1', 'user-imposter')).rejects.toThrow(AuthorizationError);
     });
 
     it('should throw NotFoundError if booking does not exist', async () => {
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([]),
-        }),
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const tx = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        };
+        return await callback(tx);
       });
 
       await expect(confirmBooking('nonexistent', 'user-1')).rejects.toThrow(NotFoundError);
@@ -192,17 +218,24 @@ describe('Booking Service', () => {
         holdExpiry: null,
       };
 
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([ticket]),
-        }),
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const tx = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockResolvedValue([ticket]),
+              }),
+            }),
+          }),
+        };
+        return await callback(tx);
       });
 
       await expect(confirmBooking('ticket-1', 'user-1')).rejects.toThrow(ConflictError);
       await expect(confirmBooking('ticket-1', 'user-1')).rejects.toThrow('Booking cannot be confirmed');
     });
 
-    it('should confirm pending booking successfully and invalidate cache', async () => {
+    it('should confirm pending booking successfully with row locking and invalidate cache', async () => {
       const ticket = {
         id: 'ticket-1',
         eventId: 'event-1',
@@ -217,21 +250,30 @@ describe('Booking Service', () => {
         holdExpiry: null,
       };
 
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([ticket]),
-        }),
-      });
+      const forMock = vi.fn().mockResolvedValue([ticket]);
 
-      (db.update as any).mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([confirmedTicket]),
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const tx = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: forMock,
+              }),
+            }),
           }),
-        }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue([confirmedTicket]),
+              }),
+            }),
+          }),
+        };
+        return await callback(tx);
       });
 
       const result = await confirmBooking('ticket-1', 'user-1');
+      expect(forMock).toHaveBeenCalledWith('update');
       expect(result.status).toBe('confirmed');
       expect(result.holdExpiry).toBeNull();
       expect(redisClient.invalidateEvent).toHaveBeenCalledWith('event-1');
@@ -343,7 +385,37 @@ describe('Booking Service', () => {
       });
 
       await expect(cancelBooking('ticket-1', 'user-1')).rejects.toThrow(ConflictError);
-      await expect(cancelBooking('ticket-1', 'user-1')).rejects.toThrow('already cancelled');
+      await expect(cancelBooking('ticket-1', 'user-1')).rejects.toThrow(
+        'Booking cannot be cancelled. Current status: cancelled'
+      );
+    });
+
+    it('should throw ConflictError if attempting to cancel an expired booking', async () => {
+      const mockTicket = {
+        id: 'ticket-1',
+        eventId: 'event-1',
+        userId: 'user-1',
+        quantity: 2,
+        status: 'expired',
+      };
+
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        const tx = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockResolvedValue([mockTicket]),
+              }),
+            }),
+          }),
+        };
+        return await callback(tx);
+      });
+
+      await expect(cancelBooking('ticket-1', 'user-1')).rejects.toThrow(ConflictError);
+      await expect(cancelBooking('ticket-1', 'user-1')).rejects.toThrow(
+        'Booking cannot be cancelled. Current status: expired'
+      );
     });
   });
 

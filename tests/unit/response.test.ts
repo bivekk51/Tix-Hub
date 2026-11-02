@@ -35,6 +35,27 @@ describe('Response Serialization', () => {
     expect(serialized!._id).toBe('custom-id');
   });
 
+  it('should recursively alias _id on nested entity objects and preserve Date instances', () => {
+    const testDate = new Date('2026-12-01T20:00:00.000Z');
+    const booking = {
+      id: 'ticket-1',
+      quantity: 2,
+      createdAt: testDate,
+      event: {
+        id: 'event-1',
+        name: 'Concert',
+        date: testDate,
+      },
+    };
+    const serialized = serializeEntity(booking);
+    expect(serialized.id).toBe('ticket-1');
+    expect(serialized._id).toBe('ticket-1');
+    expect(serialized.createdAt).toBe(testDate);
+    expect(serialized.event.id).toBe('event-1');
+    expect(serialized.event._id).toBe('event-1');
+    expect(serialized.event.date).toBe(testDate);
+  });
+
   it('should send formatted JSON success response', () => {
     const res: any = {
       statusCode: 200,

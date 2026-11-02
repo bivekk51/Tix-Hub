@@ -5,19 +5,26 @@ export const serializeEntity = <T>(entity: T): T => {
     return entity;
   }
 
+  if (entity instanceof Date || entity instanceof RegExp) {
+    return entity;
+  }
+
   if (Array.isArray(entity)) {
     return entity.map((item) => serializeEntity(item)) as unknown as T;
   }
 
   const record = entity as Record<string, any>;
-  if ('id' in record && !('_id' in record)) {
-    return {
-      ...record,
-      _id: record.id,
-    } as T;
+  const result: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(record)) {
+    result[key] = serializeEntity(value);
   }
 
-  return entity;
+  if ('id' in result && !('_id' in result)) {
+    result._id = result.id;
+  }
+
+  return result as T;
 };
 
 export const sendSuccess = (
