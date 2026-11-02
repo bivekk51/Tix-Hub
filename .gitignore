@@ -68,5 +68,9 @@ docker-compose.override.yml
 
 #postman collections
 tixhub_collection.json
+# Superpowers docs and scratch
+docs/superpowers/
+.superpowers/
+
 # Allow keeping local overrides example
 !.env.example
