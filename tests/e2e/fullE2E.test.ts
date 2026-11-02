@@ -55,26 +55,38 @@ describe('TIX-HUB Full End-to-End System Tests (PostgreSQL + Redis)', () => {
   });
 
   describe('2. User Authentication & Authorization Flow', () => {
-    it('should register an admin user', async () => {
+    it('should register a user and ignore mass-assignment of role: admin (SEC-01)', async () => {
       const res = await request(app)
         .post('/api/v1/users/register')
         .send({
           name: 'Super Admin',
           email: 'admin@tixhub.test',
           password: 'AdminPassword123!',
-          role: 'admin',
+          role: 'admin', // Should be ignored by public register endpoint
         });
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data.email).toBe('admin@tixhub.test');
-      expect(res.body.data.role).toBe('admin');
+      expect(res.body.data.role).toBe('user'); // SEC-01 verified: public registration defaults to user
       expect(res.body.data.token).toBeDefined();
       expect(res.body.data.id).toBeDefined();
       expect(res.body.data._id).toBe(res.body.data.id); // backward compatibility alias
 
-      adminToken = res.body.data.token;
       adminId = res.body.data.id;
+
+      // Securely elevate to admin in database (as done via seeding/admin CLI)
+      await db.update(users).set({ role: 'admin' }).where(eq(users.id, adminId));
+
+      // Login to get fresh admin JWT
+      const loginRes = await request(app)
+        .post('/api/v1/users/login')
+        .send({
+          email: 'admin@tixhub.test',
+          password: 'AdminPassword123!',
+        });
+      expect(loginRes.body.data.role).toBe('admin');
+      adminToken = loginRes.body.data.token;
     });
 
     it('should reject duplicate user registration with 409 Conflict', async () => {

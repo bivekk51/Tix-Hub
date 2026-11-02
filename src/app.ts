@@ -1,5 +1,6 @@
 import express from 'express';
 import { redisClient } from './config/redis.js';
+import { pool } from './db/index.js';
 import { userRoutes } from './modules/users/userRoutes.js';
 import { eventRoutes } from './modules/events/eventRoutes.js';
 import { bookingRoutes } from './modules/bookings/bookingRoutes.js';
@@ -20,14 +21,23 @@ app.get('/', (_req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (_req, res) => {
-  res.json({
-    success: true,
-    status: 'healthy',
+app.get('/health', async (_req, res) => {
+  let dbStatus = 'connected';
+  try {
+    await pool.query('SELECT 1');
+  } catch (_err) {
+    dbStatus = 'disconnected';
+  }
+
+  const isHealthy = dbStatus === 'connected';
+
+  res.status(isHealthy ? 200 : 503).json({
+    success: isHealthy,
+    status: isHealthy ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     services: {
       api: 'running',
-      database: 'connected',
+      database: dbStatus,
       cache: redisClient.isConnected ? 'connected' : 'disconnected',
     },
   });

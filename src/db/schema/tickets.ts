@@ -1,4 +1,4 @@
-import { pgTable, uuid, integer, numeric, timestamp, pgEnum, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, integer, numeric, timestamp, pgEnum, index, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './users.js';
 import { events } from './events.js';
@@ -21,6 +21,8 @@ export const tickets = pgTable(
   (table) => ({
     holdExpiryIdx: index('tickets_hold_expiry_idx').on(table.holdExpiry),
     eventUserIdx: index('tickets_event_user_idx').on(table.eventId, table.userId),
+    userIdIdx: index('tickets_user_id_idx').on(table.userId),
+    quantityCheck: check('tickets_quantity_check', sql`${table.quantity} >= 1`),
   })
 );
 

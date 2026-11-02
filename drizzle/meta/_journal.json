@@ -15,6 +15,13 @@
       "when": 1793599071552,
       "tag": "0001_perfect_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793601459903,
+      "tag": "0002_adorable_darkhawk",
+      "breakpoints": true
     }
   ]
 }

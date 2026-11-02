@@ -85,7 +85,19 @@ export class RedisClient {
   async delPattern(pattern: string): Promise<boolean> {
     if (!this.isConnected || !this.client) return false;
     try {
-      const keys = await this.client.keys(pattern);
+      const keys: string[] = [];
+      if (typeof this.client.scanIterator === 'function') {
+        for await (const chunk of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+          if (Array.isArray(chunk)) {
+            keys.push(...(chunk as string[]));
+          } else if (typeof chunk === 'string') {
+            keys.push(chunk);
+          }
+        }
+      } else {
+        const found = await this.client.keys(pattern);
+        keys.push(...found);
+      }
       if (keys.length > 0) {
         await this.client.del(keys);
       }

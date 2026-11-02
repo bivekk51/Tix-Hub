@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, integer, numeric, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, integer, numeric, timestamp, index, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './users.js';
 
@@ -19,6 +19,9 @@ export const events = pgTable(
   },
   (table) => ({
     dateIdx: index('events_date_idx').on(table.date),
+    availableTicketsCheck: check('events_available_tickets_check', sql`${table.availableTickets} >= 0`),
+    totalTicketsCheck: check('events_total_tickets_check', sql`${table.totalTickets} >= 1`),
+    priceCheck: check('events_price_check', sql`${table.price} >= 0`),
   })
 );
 
