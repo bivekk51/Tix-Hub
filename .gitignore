@@ -69,4 +69,4 @@ docker-compose.override.yml
 #postman collections
 tixhub_collection.json
 # Allow keeping local overrides example
-# !.env.example
+!.env.example
