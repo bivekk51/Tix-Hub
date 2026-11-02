@@ -1,0 +1,1 @@
+CREATE INDEX "events_date_idx" ON "events" USING btree ("date");
